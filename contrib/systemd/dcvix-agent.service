@@ -1,0 +1,13 @@
+[Unit]
+Description=dcvix agent (agent for the dcvix DCV orchestration system)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/etc/dcvix-agent/
+ExecStart=/usr/bin/dcvix-agent --conf /etc/dcvix-agent/dcvix-agent.conf
+Restart=always
+RestartSec=30s
+
+[Install]
+WantedBy=multi-user.target

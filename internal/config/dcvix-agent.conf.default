@@ -1,0 +1,33 @@
+[agent]
+# hostname or IP of the director REQUIRED.
+director_host = 127.0.0.1
+# The port the director is listening on. Default: 8445
+director_port = 8445
+# The port the agent will listen on. Default: 8446
+agent_port = 8446
+# IP address to bind the agent server. Default: 0.0.0.0 (all interfaces)
+bind_address = 0.0.0.0
+# Tags to identify this agent. Default: empty
+tags = 
+# dcv binary path
+# Default on linux: /usr/bin/dcv
+# Default on windows: C:\Program Files\NICE\DCV\Server\bin\dcv.exe or C:\Program Files\Amazon\DCV\Server\bin\dcv.exe
+# dcv_path = /usr/bin/dcv
+# director update frequency in seconds: Default 30, set to 0 to disable
+update_interval = 30
+# idle session reaper frequency in seconds: Default 60, set to 0 to disable
+reap_interval = 60
+# Directory for persistent agent state (keys, certs, guid, ca). Override per platform if empty.
+# Linux default: /var/lib/dcvix-agent
+# Windows default: %ProgramData%/dcvix/Agent
+# data_dir = "/var/lib/dcvix-agent"
+
+[log]
+# log verbosity. Default: info
+# Valid values: debug, info, warning, error, critical
+level = info
+# Linux default: /var/log/dcvix-agent
+# Windows default: %ProgramData%/dcvix/Agent/log
+# directory = /var/log/dcvix-agent
+# Keep N log files each 100Mb. Default: 2
+rotation = 2

@@ -1,0 +1,211 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-ubuntu:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Install deb build dependencies
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get -y install
+          ca-certificates
+          make
+          curl
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Downloads go modules dependencies
+        run: go mod tidy
+
+      - name: Build Linux binary
+        run: make deb
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-linux-ubuntu
+          path: |
+            dist/dcvix-agent-${{ env.VERSION }}.deb
+            dist/dcvix-agent-v${{ env.VERSION }}*.tar.gz
+
+  build-rpm:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    container:
+      image: rockylinux/rockylinux:9
+
+    defaults:
+      run:
+        shell: /bin/bash -e {0}
+
+    env:
+      GO_VERSION: '1.26'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Install RPM build dependencies
+        run: |
+          dnf install -y bash rpm-build systemd systemd-rpm-macros rpmdevtools make gcc which git golang
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Build RPM package
+        run: |
+          export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:$PATH
+          make rpm
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-linux-rpm
+          path: rpmbuild/RPMS/x86_64/dcvix-agent-${{ env.VERSION }}-*.el9.x86_64.rpm
+
+  installer:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Install deb build dependencies
+        run: >-
+          sudo apt-get update &&
+          sudo apt-get -y install
+          ca-certificates
+          make
+          curl
+          nsis
+          p7zip-full
+
+      - name: Install Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.26'
+
+      - name: Downloads go modules dependencies
+        run: go mod tidy
+
+      - name: Build Windows binary and Installer
+        run: |
+          export PATH=$PATH:/usr/local/go/bin:$HOME/go/bin
+          go install github.com/tc-hib/go-winres@latest
+          make installer
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-assets-windows
+          path: |
+            dist/dcvix-agent-v${{ env.VERSION }}*-setup.exe
+            dist/dcvix-agent-v${{ env.VERSION }}*.zip
+
+  release:
+    needs: [build-ubuntu, build-rpm, installer]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Get version from tag
+        id: get_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_ENV
+
+      - name: Download Linux deb and tar.gz artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets-linux-ubuntu
+          path: dist/
+
+      - name: Download Linux rpm artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets-linux-rpm
+          path: dist/
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: release-assets-windows
+          path: dist/
+
+      - name: Consolidate artifacts
+        run: mv dist/* . && rm -rf dist
+
+      - name: Debug release files
+        run: |
+          pwd
+          ls -la
+          find . -maxdepth 2 -type f | sort
+          echo "dist contents:"
+          find dist -type f | sort || true
+
+      - name: Generate checksums
+        run: |
+          sha256sum *.tar.gz *.rpm *.deb *.zip *.exe > checksums.txt
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            *.tar.gz
+            *.rpm
+            *.deb
+            *.exe
+            *.zip
+            checksums.txt
+          name: dcvix-agent ${{ env.VERSION }}
+          body: |
+            ## dcvix-agent ${{ env.VERSION }}
+            
+            ### Packages
+            - Linux binary (tar.gz)
+            - Debian package (deb)
+            - RPM package (rpm)
+            - Windows binary (zip)
+            - Windows installer (exe)
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
